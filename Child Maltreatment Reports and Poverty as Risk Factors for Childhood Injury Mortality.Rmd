@@ -1,0 +1,548 @@
+---
+title: "Child Maltreatment Allegation and Poverty as Risk Factors for Childhood Injury Mortality"
+author: "Jooree Ahn"
+date: "December 14, 2017"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE)
+
+## Load packages
+library(Amelia)
+library(MASS)
+library(simcf)
+library(survival)
+library(broom)
+library(ggplot2)
+library(stringr)
+library(knitr)
+library(kableExtra)
+library(tidyr)
+library(dplyr)
+```
+
+```{r, include = FALSE}
+## Load datasets
+# Non-time-varying
+load("S:/Data Portal/Jooree/RODIS/Data/rbc.rda") 
+
+rbc <- rbc %>%
+   filter(!is.na(male))
+
+# Time-varying 
+load("S:/Data Portal/Jooree/RODIS/Data/rbc_tvc.rda")
+```
+
+```{r, include = FALSE}
+### Injury Death Model
+
+## Load Cox model objects
+# Replication Model
+load("S:/Data Portal/Jooree/RODIS/Data/model1.rda", verbose = TRUE)
+mod1_fit <- mfit
+mod1_dat <- tidy(mod1_fit) %>% 
+  mutate(model = "Model 1")
+
+# Adjusted Model (with high cd)
+load("S:/Data Portal/Jooree/RODIS/Data/model2.rda", verbose = TRUE)
+mod2_fit <- mfit
+mod2_dat <- tidy(mod2_fit) %>%
+  mutate(model = "Model 2")
+
+## Load simulated data objects
+# Replication Model
+load("S:/Data Portal/Jooree/RODIS/Data/mod1_sim.rda", verbose = TRUE)
+sim1_dat <- mod1_sim$data %>%
+  mutate(model = "Model 1")
+
+# Adjusted Model (with high cd)
+load("S:/Data Portal/Jooree/RODIS/Data/mod2_sim.rda", verbose = TRUE)
+sim2_dat <- mod2_sim$data %>%
+  mutate(model = "Model 2")
+```
+
+```{r}
+### Maltreatment Allegation Model
+## Load multivariate logit model object
+load("S:/Data Portal/Jooree/RODIS/Data/mv_logit_fit.rda")
+
+## Load simulated data objects
+load("S:/Data Portal/Jooree/RODIS/Data/pbp_cd_sim.rda")
+```
+
+# I. Introduction
+Child safety is the most prominent concern of child protective services with a child injury leading to death considered the worst outcome.  Young children under the age of five are particularly vulnerable to a fatality caused by injury.  When someone in a child’s community is concerned for the child’s safety and well-being, they may file a report to Child Protective Services (CPS).  One innovative 2011 study examined the relationship between prior child maltreatment allegations to CPS and injury deaths among a birth cohort (1999-2006) of California children under the age of five (Putnam-Hornstein, 2011).  This population-based study found that a prior allegation of child maltreatment was the strongest risk factor of injury deaths among young children, with a ratio of risk that was about two to six times higher than children without an allegation of child maltreatment, depending on the manner of the injury death (i.e intentional, unintentional, or undetermined).  Further, the California study posits that a prior allegation of child maltreatment signals a risk profile for fatal child injury that is independent of the risks related to the presence of poverty.
+
+# II.	Background
+## Poverty & Child Maltreatment
+The literature relating poverty to child welfare involvement provides consistent support that the overrepresentation of poor families in child welfare cases is not an artifact of biased reporting, but rather reflects poverty-related needs and stressors (Jonson-Reid, Drake, & Kohl, 2009).  Poverty is often considered the single best predictor of child maltreatment, especially child neglect.  According to the Fourth National Incidence Study of Child Abuse and Neglect (NIS-4), children in low socioeconomic status households had significantly higher rates of maltreatment in all categories of both abuse and neglect (Sedlak, Mettenburg, Basena, Peta, McPherson, & Greene, 2010).  They were more than three times as likely to be abused and about seven times as likely to be neglected.  However, the specific pathways linking poverty to child maltreatment are still uncertain and are likely numerous.  For example, experiencing poverty likely generates family stress, which in turn, leads to greater likelihood of abuse or neglect.  Another likely scenario for parents living in poverty is that they do not have access to the resources necessary for child health and safety, and are unable to provide appropriate care for children.  It is also possible that other factors such as mental health challenges and substance abuse make parents more likely to be poor (or vice versa) and subsequently abusive or neglectful.  Nationally and in Washington State, children experience neglect more often than any other forms of maltreatment.  Lack of housing and transportation, in addition to access to substance abuse treatment and health services, are common themes in child neglect cases.
+
+## Neighborhood Poverty & Child Maltreatment
+The relationship between neighborhood poverty and adverse health outcomes are also well established in the literature.  This body of research suggests that neighborhood poverty acts as a context in which adverse childhood experiences, including fatal child injuries, are more likely to occur (Graham, Stepura, Baumann, & Kern, 2010; Lucas, Wezner, Milner, McCanne, Harris, Monroe-Posey, & Nelson, 2002).  In particular, child maltreatment and infant mortality rates are shown to increase among communities with a concentrated level of neighborhood disadvantage (Brooksgunn, Duncan, Klebanov, & Sealand, 1993; Sampson, Morenoff, & Gannon-Rowley, 2002).  Neighborhood disadvantage has also been most strongly associated with child neglect, a category of child maltreatment that includes acts or failures to act that result in injury or risk of injury (Drake & Pandey, 1996).  Thus, individual measures of poverty by itself may not capture this additional layer of economic disadvantage in a child’s life.
+The suggestion of the California study that an allegation of child maltreatment is an independent signal of risk, beyond poverty provides an opportunity to investigate the influence of other dimensions of poverty not captured by an individual measure, such as neighborhood poverty or economic hardship at the community level.  
+
+# III.	The Current Study
+The current study uses Washington State data to replicate the Putnam-Hornstein (2011) prospective birth cohort examination of all manners of injury death in California.  This includes intentional, unintentional, and undetermined manners of injury death.  As was done in the California study, we link birth, child welfare, and death records to examine death by injury after nonfatal maltreatment allegations to the Washington State child welfare system.  This study also includes sociodemographic covariates constructed from the information collected on birth records to replicate those used in the California study.  However, the original California study only uses the form of payment used for a child’s birth, either public insurance or other types of insurance, as a proxy for a child’s individual measure of poverty.  Given the literature relating neighborhood indicators of poverty to child welfare involvement and child safety hazards, the current study also examines a neighborhood level measure of poverty in addition to the use of the birth payment covariate.  
+
+A neighborhood level measure of poverty is constructed using the The Life Course Indicator: Concentrated Disadvantage (LC-06) developed in 2013 to test whether its inclusion improves the fit of the injury death model.  The LC-06 is one of a series of tools developed by the Association of Maternal and Child Health Programs (AMCHP) to measure factors that impact maternal and child public health.  This tool is designed to capture the geographical clustering of economic and social factors that characterize disadvantaged neighborhoods and significantly affect the life course.  The use of this tool was identified as a viable approach due its use of census tract boundaries and the availability of coordinate system (i.e.  latitude and longitude) and other location information on maternal residence from birth records.  Thus, in addition to a single, individual measure of poverty, a comprehensive conception of poverty composed of multiple dimensions of neighborhood disadvantage was investigated.  
+
+Lastly, the current study specifically investigates the extent to which a prior child maltreatment report is a signal of risk that is independent of all other variables, particularly poverty, as put forth by the findings of the California study.  
+
+## Research Questions
+This study asks three main questions: 
+
+1. Are the risks for all manners of injury death in the first five years of life found in Washington State different from those found in California? 
+2. Does the injury death model fit improve with the addition of a neighborhood-level measure of poverty (i.e.  concentrated disadvantage)?
+3. Does the presence of a prior report of child maltreatment signal a risk that is independent of the presence of poverty given by an individual and neighborhood level measure?
+
+## Methods
+_**Data.**_  All birth record files from all live births in Washington for the years 2003-2012 were compiled from the Washington State Department of Health (DOH).  Death records were also obtained from the DOH and child welfare records were obtained from the Washington State Department of Social and Human Services Children’s Administration (DSHS CA).  These data were obtained through a data sharing agreement between Partners for Our Children at the University of Washington, CA, and DOH.  The study received approval through the Washington State Institutional Review Board.  
+
+2011-2014 American Community Survey (ACS) data was used to build a continuous measure of concentrated disadvantage for each US Census Bureau census tract in Washington State, as a well as a dichotomous flag for high concentrated disadvantage according to a recommended threshold (75th percentile).
+
+_**Linking Data.**_  Data were linked by the University of Washington School of Public Health (SPH) by assigning a unique identification number to all the DOH records.  SPH then used a deterministic linkage method, whereby data amongst the different records were compared exactly and a hierarchical match value was created to conduct ‘blocking’, a linkage procedure in which specific variables are required to match exactly, and other variables that may not be exact matches are compared.  This was done using the computer program FoxPro., using blocking based on hierarchical matching on various elements in the records.  Probabilistic linkages were also used when deterministic matches were not accurate enough using the last name, first name, middle name, and zip code variables.  The probabilistic linkages were assisted through the use of the application LinkPlus, software created by the Centers for Disease Control and Prevention (CDC).  When comparing the linkage results of FoxPro and LinkPlus, the performance of the applications were indistinguishable.  
+
+_**Match rates.**_  Approximately 68.7% of CA records of children born from 2003 to 2012 were matched to a WA state birth record (N = 184,560).  31.3% of CA records were unmatched to birth records likely due to migration and were excluded from the study.  Some children referred to the child welfare system may not have been born in Washington, and will therefore not have a birth record.  Failure to match may also occur due to imperfections in our linkage process, for which we were unable to use social security numbers, and thus had to rely on names, birth dates, and other noisy features as well as empty data fields or entry errors.  
+
+## Variables
+_**Injury Death.**_  Like Putnam-Hornstein, injury deaths among children under five were identified using ICD-10 codes from death records.  This study replicates the model including all manners of injury death classified as either unintentional, intentional, or undetermined by the external death codes (VXWY).  As in the California study, deaths due to terrorism, complications of medical care, and self-harm were excluded.  
+
+_**Maltreatment Allegation.**_  Maltreatment allegation or CPS report were obtained from Washington’s CA data and used to identify all children born between 2003 and 2012 and reported to CPS after birth and before the age of five.  As in the original study, all reported children, whether evaluated in or out by CPS, were included in the sample (N = 140,144).  Reports to CPS on or after the date of death were considered non-CPS cases as there was no opportunity for CPS to intervene before the child’s death.
+
+_**Other Covariates.**_  Covariates were constructed as dichotomous variables, except for maternal race and ethnicity, which includes White, Black, Hispanic, Asian/Pacific Islander, Native American, and other or unknown.  The latter two race categories were excluded in the California study.  However, they were maintained in the replication due to their demographic significance in Washington State.  A health risk designation was constructed if the child had been diagnosed with any of the following birth congenital abnormalities:  anencephaly, chromosome anomaly, orofacial cleft, diaphragmic hernia, Down’s syndrome, heart malformations, omphalocele, or spina bifida.  Sex identification was taken from the child’s birth records.  As previously discussed, birth payment is a binary variable for those whose births were paid for by public insurance and those who had a different type of payment (such as private insurance or self-pay).  Mother’s age at the time of birth was categorized into mothers younger and older than 25 years.  Maternal education was obtained from the child’s birth records and categorized into those who had at least some college experience and those who did not.  Paternity was labeled as established if at least one of the major paternal information fields in the birth record had a value that was not null or otherwise invalid.  Birth order was obtained from the parity indicator on the birth record and separated by children who were the first born to the mother and those who were not.  
+
+Best efforts were made to construct the covariates in the same manner as was done in the California study, however there were limitations due to differences in the information collected in birth records.  For example, California’s health risk variable reported birth abnormalities that were not captured in the Washington State data.  Also, in the Washington State data, maternal education is poorly recorded and has a high volume of missingness.  Therefore, the covariates health risk and maternal education are excluded from the final analyses.
+
+_**Neighborhood Poverty.**_  Following the LC-06 guidelines, a neighborhood level measure of poverty was developed at the census tract level, a unit of geography used by the U.S.  Census Bureau, which generally has a population size of 1,200-8,000, with an optimum size of 4,000.  Census tracts were considered small enough to represent a neighborhood-level construct.  Geospatial mapping was performed to overlay latitude and longitude coordinates from 2003-2011 birth records to census tracts.  2012 birth records did not contain coordinate information; zipcode (ZCTA) or county areas were used for these records.  
+
+The measure is calculated from five variables: 
+
+1. Percent of individuals below the poverty line 
+2. Percent of individuals on public assistance 
+3. Percent of female-headed households 
+4. Percent unemployed 
+5. Percent less than age 18  
+
+These factors were found to be highly associated with one another and act as a proxy for the level of economic disadvantage within a community (Sampson, 1997).  All five factors were identified or constructed from data reported in the ACS 5-year estimates to return a composite z-score indicating the level of disadvantage measured within a census tract.  Latitude and longitude information on maternal residence from hospital admissions record was used to identify the census tracts associated with each birth.  The measure was then transformed into a binary variable by setting the 75th percentile as the threshold, which flags births whose maternal residence are in census tract areas with a high or lower concentration of disadvantage.  Both the z-score and binary flag variables are tested in the analyses.
+
+## Analysis
+_**Chi-square Test.**_  Following the analysis plan of the California study, descriptive statistics and chi-square goodness-of-fit analyses were conducted on each covariate.  
+
+_**Cox Regression, Injury Death Model.**_  Cox proportional hazards modeling was replicated from the California study and used to test the association between a maltreatment report to CPS and injury death in Washington State.  Maltreatment allegation is treated as a time-varying covariate while all other covariates are time-invariant.  Hazard ratios with 95% confidence intervals are reported.  The results of this models are compared to the results of the original California model using Bayesian Information Criterion (BIC).    
+
+*Replication Model:*
+
+$$h(t | allegation(t), \chi) = h_0(t)exp[\beta_1allegation(t)] + \beta_2public\,birth\,pay + \beta_3male + \beta_4maternal\,race \\$$
+$$+ \beta_5young\,mother + \beta_6no\,paternity + \beta_7later\, born\\$$
+
+Then, an adjusted model that includes a neighborhood level measure of poverty (i.e. high cd) is run, and compared to the Washington replication model also using BIC.  
+
+*Adjusted Model:*
+
+$$h(t | allegation(t), \chi) = h_0(t)exp[\beta_1allegation(t)] + \beta_2public\,birth\,pay + \beta_3male + \beta_4maternal\,race \\$$
+$$+ \beta_5young\,mother + \beta_6no\,paternity + \beta_7later\, born + \beta_8high\, cd\\$$
+
+_**Logistic Regression, Maltreatment Allegation Model.**_  Binomial logistic regression modeling was conducted to test the association between each poverty variable and a maltreatment allegation to CPS, where: 
+
+$$Pr(allegation = 1) = logit^{-1}(\beta_0 + \beta_1public\,birth\,pay + \beta_2male + \beta_3maternal\,race \\$$
+$$ + \beta_4young\,mother + \beta_5no\,paternity + \beta_6later\, born + \beta_7high\, cd)\\$$
+
+Maltreatment allegation is treated as a dichotomous variable indicating whether a report was made before the age of five.  Predicted probabilities of the sample and expected probabilities with 95% confidence intervals of a simulated dataset of children with and without an allegation report are reported.
+
+# IV. Results
+## Descriptive Statistics
+The characteristics of children born in Washington State between 2003 and 2012 and the characteristics of the children in the birth cohort who had an injury fatality prior to age five are presented in Table 1.  In total, 222 children were reported to have injury deaths out of a birth cohort of 865,149 children.  Washington State had a fatal injury rate of 0.26 per 1,000 children, while California had a higher rate of 0.44 per 1,000 children.  In the California study, children who had previously been reported to child protective services were overrepresented in injury deaths.  While this is not the case in Washington, children with a maltreatment allegation represent about 16% of the birth cohort but about 44% of the injury deaths.  In Washington, about 72% of injury deaths were of children whose births were paid for by public insurance and about 45% were of children who lived in neighborhoods with a high concentration of economic disadvantage.  Chi-square test statistics identify maltreatment allegation, public insurance birth payment, the races Native American and White (significant population majority), missing paternity, and high concentrated disadvantage as statistically significant predictors of injury death.  
+
+```{r table 1}
+## All births
+pct_tbl1 <- rbc %>%
+  dplyr::select(allegation, public_birth_pay, male, black, hispanic, native_american, asian_pacific_islander, white, 
+                other_unknown, mom_young, no_paternity, later_born, high_cd) %>%
+  gather(variable, value) %>%
+  count(variable, value) %>%
+  mutate(total_percent = n/nrow(rbc))
+
+```
+
+```{r}
+## Injury deaths only
+deaths <- rbc %>% filter(all_injury == 1) 
+
+pct_tbl2 <- deaths %>%
+  dplyr::select(allegation, public_birth_pay, male, black, hispanic, native_american, asian_pacific_islander, white, 
+                other_unknown, mom_young, no_paternity, later_born, high_cd) %>%
+  gather(variable, value) %>%
+  count(variable, value) %>%
+  mutate(death_percent = n/nrow(deaths))
+```
+
+```{r}
+## Chi-square tests of each covariate
+
+# subset covariates 
+variable <- dplyr::select(rbc, allegation, public_birth_pay, high_cd, 
+                            male, mom_young, no_paternity, later_born, 
+                            black, white, hispanic, asian_pacific_islander, native_american, other_unknown)
+
+colnames(variable) <- str_replace_all(colnames(variable), pattern = "_", replacement = ".") # rename columns
+
+# create function to retrn chi-squares
+xsq_fun <- function(variable, Injury){
+
+    xsq <- summarise_all(variable, funs(
+      xsquare = round(chisq.test(., Injury)$statistic, 1), 
+      pvalue = chisq.test(., Injury)$p.value)
+      ) %>%
+      gather(covariates, value) %>%
+      separate(covariates, c("variable", "statistics"), sep = "_") %>%
+      spread(statistics, value) 
+    
+    return(xsq)
+}
+
+# run function
+all_injury_xsq <- xsq_fun(variable, rbc$all_injury) 
+
+# manipulate table
+xsq_tbl <- all_injury_xsq %>%
+  mutate(chi_square = ifelse(pvalue <.001, paste0(xsquare, "***", sep = ""), 
+                          ifelse(pvalue <.01 & pvalue >=.001, paste0(xsquare, "**", sep = ""),
+                                 ifelse(pvalue <.05 & pvalue >=.01, paste0(xsquare, "*", sep = ""),
+                                        xsquare)))) %>%
+  dplyr::select(-xsquare, -pvalue) %>%
+  mutate(variable = str_replace_all(variable, pattern = "[.]", replacement = "_"),
+         value = 1)
+```
+
+```{r}
+## Join all tables
+tbl_1 <- pct_tbl1 %>%
+  left_join(pct_tbl2, by = c("variable", "value")) %>%
+  left_join(xsq_tbl, by = c("variable", "value")) %>%
+  mutate(total_percent = paste0(round(total_percent*100, 1), "%"),
+         death_percent = paste0(round(death_percent*100, 1), "%"),
+         chi_square = ifelse(is.na(chi_square), "", chi_square),
+         variable = factor(variable, levels = c("allegation", "public_birth_pay", "male", 
+                                                "black", "hispanic", "native_american", "asian_pacific_islander", "white", "other_unknown",  
+                                                "mom_young", "no_paternity", "later_born", "high_cd"))) %>%
+  arrange(variable, desc(value)) %>%
+  mutate(category = c(rep("Maltreatment",2), rep("Birth Payment", 2), rep("Sex", 2), rep("Maternal Race/Ethnicity", 12), 
+                      rep("Maternal Age", 2), rep("Paternity", 2), rep("Birth Order", 2), rep("Concentrated Disadvantage", 2)),
+         discard = ifelse(category == "Maternal Race/Ethnicity" & value == 0, 1, 0)) %>%
+  filter(discard == 0) %>%
+  mutate(label = c("Allegation", "No Report", "Public", "Other", "Male", "Female", 
+                   "Black", "Hispanic", "Native American", "Asian/Pacific Islander", "White", "Other/Unknown",
+                   "< 25 Years", "25 Years +", "Established", "Missing", "Later Born", "First Born", "High", "Low")) 
+```
+
+#### Table 1.
+```{r}
+tbl_1 %>%
+  dplyr::select(label, total_percent, death_percent, chi_square) %>%
+  kable(format = "html", 
+        caption = "Characteristics of Children Born in Washington State (2003-2012) and Died by Injury before the Age of Five",
+        col.names = c("Covariates", "%", "%", "Chi-square"),
+        align = c("l", "c", "c", "c")) %>%
+  column_spec(2:4, "8em") %>%
+  add_header_above(c(" " = 1, "N = 865,149" = 1, "N = 222" = 2)) %>%
+  add_header_above(c(" " = 1, "Births" = 1, "Injury Deaths" = 2)) %>%
+  group_rows("Maltreatment", 1, 2) %>%
+  group_rows("Birth Payment", 3, 4) %>%
+  group_rows("Sex", 5, 6) %>%
+  group_rows("Maternal Race/Ethnicity", 7, 12) %>%
+  group_rows("Maternal Age", 13, 14) %>%
+  group_rows("Paternity", 15, 16) %>%
+  group_rows("Birth Order", 17, 18) %>%
+  group_rows("Concentrated Disadvantage", 19, 20)
+```
+***
+\*p < .05, \*\*p < .01, \*\*\*p < .001
+
+## Cox Regression Model with Time-Varying Covariate
+Table 2 presents results from the Washington replication Cox model Cox and presents hazard ratios with 95% confidence intervals.  The dependent variable is any injury death and includes all the replication covariates determined to be appropriate for the model.
+
+#### Table 2.
+```{r table 2}
+hr_dat <- mod1_dat %>%
+  mutate_at(vars(estimate, conf.low, conf.high), exp) %>%
+  mutate(term = str_replace_all(term, "mom_eth_race", ""),
+         term = as.factor(term),
+         term = factor(term, 
+                       levels = c("later_born", "no_paternity", "mom_young", "other/unknown", "native american", "asian/pacific islander",
+                                        "hispanic", "black", "male", "public_birth_pay", "allegation_tvc"),
+                       labels = c("Later Born", "Missing Paternity", "Young Mother", 
+                                       "Other/Unknown (vs. White)", "Native American (vs. White)", "Asian/Pacific Islander (vs. White)",
+                                       "Hispanic (vs. White)", "Black (vs. White)", "Male", "Public Birth Pay", "Allegation")))
+
+(tbl_2 <- hr_dat %>%
+    arrange(desc(term)) %>%
+    mutate(estimate = round(estimate, 2),
+           conf.low = round(conf.low, 2),
+           conf.high = round(conf.high, 2),
+           estimate = ifelse(p.value <.001, paste0(estimate, "***", sep = ""), 
+                             ifelse(p.value <.01 & p.value >=.001, paste0(estimate, "**", sep = ""),
+                                    ifelse(p.value <.05 & p.value >=.01, paste0(estimate, "*", sep = ""),
+                                           estimate)))) %>%
+    dplyr::select(term, estimate, conf.low, conf.high) %>%
+    kable(format = "html",
+          caption = "Injury Death Hazard Ratios for Children Born in Washington (2003-2012) with 95% Confidence Intervals",
+          col.names = c("Covariates", "exp(coef)", "Lower", "Upper"),
+          align = c("l", "c", "c", "c")) %>%
+    #column_spec(1, bold = TRUE) %>%
+    column_spec(2, width = "10em") %>%
+    column_spec(3:4, width = "5em") %>%
+    add_header_above(c(" " = 1, "Hazard Ratio" = 1, "95% CI" = 2)))
+```
+***
+\*p < .05, \*\*p < .01, \*\*\*p < .001
+
+In Washington, children with a prior maltreatment allegation were about seven times more likely to suffer an injury death within five years of age (HR: 7.3; 95% CI: [5.39, 9.90]).  According to this model, maltreatment allegation presents by far the strongest risk for injury death.  Children with Native American or other/unknown racial identity, young mothers, missing paternity, or were later born, were also more likely to suffer an injury death.  Whether a child’s birth was paid for by public insurance is not significant in the model.
+
+_**Comparison with California Model.**_  Figure 1 presents a plot with the hazard ratios for the injury death models in both Washington State and California.  The California study found that children with a previous maltreatment allegation report were at 2.59 times greater risk of injury death than children without (95% CI: [2.27, 2.97]).  Whether or not a child’s birth was paid for by public insurance, is only marginally significant in the model.  Additionally, California children who were male, Black, had a health risk, a mother with lower education, a younger mother, missing paternity, or were later born had an increased risk of injury death.  Notably, the hazard ratio for maltreatment allegation is almost three times higher in Washington, suggesting that an allegation in Washington is a much stronger signal of risk than in California.  The results of both models are otherwise similar or insignificant, with the exception of the covariates that were either included or excluded in the Washington model that were not in the California model (i.e.  health risk, Native American, other or unknown race, and low maternal education).
+
+#### Figure 1.
+```{r figure 1}
+# California data
+hr_ca <- data_frame(Covariates = c("allegation", "public_birth_pay", "male", "health_risk",
+                                          "asian (vs. white)", "black  (vs. white)", "hispanic  (vs. white)", 
+                                          "mom_young", "mom_low_ed", "no_paternity", "later_born"),
+                    HR = c(2.59, 1.16, 1.35, 1.39, 0.74, 1.34, 0.66, 1.86, 1.46, 1.32, 1.64),
+                    Lower = c(2.27, 1.03, 1.23, 1.22, 0.61, 1.14, 0.59, 1.67, 1.28, 1.16, 1.47),
+                    Upper = c(2.97, 1.30, 1.49, 1.49, 0.9, 1.57, 0.75, 2.06, 1.66, 1.51, 1.82),
+                    State = rep("California"))
+
+# Washington data
+hr_wa <- mod1_dat %>%
+  transmute(Covariates = c("allegation", "later_born", "male", 
+                       "asian (vs. white)", "black  (vs. white)", "hispanic  (vs. white)", "native_american (vs. white)", "other/unknown (vs. white)",
+                       "mom_young", "no_paternity", "public_birth_pay"),
+         HR = exp(estimate),
+         Lower = exp(conf.low),
+         Upper = exp(conf.high),
+         State = rep("Washington"))
+
+# Join State tables
+hr_state <- bind_rows(hr_ca, hr_wa) %>%
+  mutate(Covariates = factor(Covariates, 
+                            levels = c("later_born", "no_paternity", "mom_young", "mom_low_ed",
+                                       "other/unknown (vs. white)", "native_american (vs. white)", "asian (vs. white)",
+                                       "hispanic  (vs. white)", "black  (vs. white)", "health_risk", "male", 
+                                       "public_birth_pay", "allegation"),
+                            labels = c("Later Born", "Missing Paternity", "Young Mother", "Low Education",
+                                       "Other/Unknown (vs. White)", "Native American (vs. White)", "Asian (vs. White)",
+                                       "Hispanic (vs. White)", "Black (vs. White)", "Health Risk", "Male", 
+                                       "Public Birth Pay", "Allegation")))
+
+# Plot
+ggplot(hr_state, aes(x = Covariates, y = HR, color = State)) +
+  geom_point(position = position_dodge(width = 0.65)) +
+  geom_errorbar(aes(ymin = Lower, ymax = Upper),
+                size = 1, 
+                  width = 0.5,
+                  position = position_dodge(width = 0.65)) +
+  geom_hline(aes(yintercept = 1)) +
+  coord_flip() +
+  scale_y_continuous(trans = "log", breaks = c(0.5, 1, 2, 4, 8)) +
+  scale_color_brewer(palette = "Set1") +
+  labs(title = "Risk of Injury Death within 5 Years of Age by State",
+       y = "Hazard Ratios with 95% CI (log scale)",
+       color = "State") +
+  theme_bw(base_size = 12)  +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+```
+
+_**Comparison with the Adjusted Model.**_  Figure 2 presents a plot with the hazard ratios for the injury death models in the Washington replication model and the adjusted model that includes the additional poverty covariate, high concentrated disadvantage (high cd).  The models perform nearly identically, with neither the individual-level (public birth pay) nor the neighborhood-level (high cd) poverty covariates being significant.  
+
+#### Figure 2.
+```{r figure 2}
+# Join WA model tables
+hr_wa_mods <- bind_rows(mod1_dat, mod2_dat) %>%
+  mutate_at(vars(estimate, conf.low, conf.high), exp) %>%
+  mutate(term = str_replace_all(term, "mom_eth_race", ""),
+         term = factor(term, 
+                       levels = c("high_cd", "later_born", "no_paternity", "mom_young", 
+                                  "other/unknown", "native american", "asian/pacific islander", "hispanic", "black", 
+                                  "male", "public_birth_pay", "allegation_tvc"),
+                       labels = c("High CD", "Later Born", "Missing Paternity", "Young Mother", 
+                                  "Other/Unknown (vs. White)", "Native American (vs. White)", "Asian/Pacific Islander (vs. White)", 
+                                  "Hispanic (vs. White)", "Black (vs. White)", 
+                                  "Male", "Public Birth Pay", "Allegation")))
+
+# Plot
+ggplot(hr_wa_mods, aes(x = term, y = estimate, color = model)) +
+  geom_point(position = position_dodge(width = 0.65)) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
+                size = 1,
+                  width = 0.5,
+                  position = position_dodge(width = 0.65)) +
+  geom_hline(aes(yintercept = 1)) +
+  coord_flip() +
+  scale_y_continuous(trans = "log", breaks = c(0.5, 1, 2, 4, 8)) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Risk of Injury Death within 5 Years of Age in Washington State",
+       x = "Covariates", 
+       y = "Hazard Ratios with 95% CI (log scale)",
+       color = "Model") +
+  theme_bw(base_size = 12) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+Table 3 presents BIC for each model and favors the replication model by a difference of 4.92.  Given the moderate evidence for favoring the replication model and the substantive literature on the effects of neighborhood poverty on health and social outcomes, we still justify the inclusion of a neighborhood poverty measure based on its theoretical significance.
+
+#### Table 3.
+```{r table 3}
+data_frame(Model = c("Replication", "Adjusted"), 
+           BIC = c(BIC(mod1_fit), BIC(mod2_fit))) %>%
+  mutate(BIC = round(BIC, 2)) %>%
+  kable(format = "html",
+        caption = "BIC Test between Replication and Adjusted Models",
+        col.names = c("Washington Models", "BIC"),
+        align = c("l", "c")) 
+```
+
+***
+
+_**Simulation of Expected Survival Curves.**_  Figure 3 presents two inverted survival curves displaying the proportions of children who have the poverty indicators and those who don’t that are expected to die by injury over the six years from birth, stratified by maltreatment allegation.  For children with no indicators of poverty, the difference in means between children with and without a maltreatment allegation is about 0.24%, or an increased rate of 2.4 injury deaths per 1,000 for children with a maltreatment allegation.  Among poor children, the difference in means is about 0.35%, or an increased rate of 3.5 injury deaths per 1,000 for children with a maltreatment allegation.  This suggests that the presence of poverty indicators increase the risk of injury death even further.  Though neither of the poverty measures are significant in the output of the Cox models, among children with a maltreatment allegation, simulation of the final model between children who are poor and those who are not shows a difference in means of about 0.13%, or an increased rate of 1.3 injury deaths per 1,000 for children who are poor. 
+
+#### Figure 3.
+```{r figure 3}
+## Plot from simulation
+final_mod <- sim2_dat %>%
+  mutate(cf = factor(cf,
+                     levels = c("No Poverty", "Mean", "Poverty")),
+         Allegation = ifelse(allegation == 0, "Absent", "Present"))
+
+ggplot(final_mod %>% filter(cf != "Mean"), aes(y = 1 - M, x = years, color = Allegation)) +
+  scale_color_brewer(palette = "Set2") +
+  scale_fill_brewer(palette = "Set2") +
+  geom_line() +
+  geom_ribbon(aes(ymin = 1- lower, ymax = 1 - upper, fill = Allegation), alpha = 0.15) +
+  facet_grid(~ cf) +
+  labs(title = "Expected Proportions Dying by Injury in Washington State", 
+       y = "Proportion Dying", x = "Time (Years)") +
+  theme_bw(base_size = 12) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+```
+
+## Binomial Logistic Regression Model
+_**Maltreatment Allegation as Outcome.**_  Logistic regression with maltreatment allegation as the dependent variable was performed with the same covariates as the adjusted Cox model.  However, instead of the binary concentrated disadvantage variable, the continuous z-score measure is used, as it provides more information.  All covariates were statistically significant in this model, with public birth payment having the strongest effect size.  Table 4 presents the predicted probabilities of both poverty measures.  About 1 in 4 children whose births were paid for with public insurance are predicted to have a maltreatment allegation within five years of birth while that number is about 1 in 12 for children whose birth were paid for by other means.  About 1 in 5 children who live in neighborhoods in the third quartile (75th percentile) of concentrated disadvantage is predicted to have a maltreatment allegation within five years of birth while that number is about 1 in 12 for children in first quartile (25th percentile).
+
+#### Table 4.
+```{r table 4}
+## Multivariate Model using all Birth Record Covariates and concentrated disadvantage z-score
+pred_fit <- augment(mv_logit_fit, type.predict = "response")
+
+pred_tbl <- pred_fit %>%
+  gather(variable, value, public_birth_pay:later_born) %>%
+  group_by(variable, value) %>%
+  summarise(mean_pred = mean(.fitted),
+            se_pred = mean(.se.fit)) %>%
+  ungroup() %>%
+  mutate(mean_pred = round(mean_pred, 3),
+         se_pred = round(se_pred, 3))
+
+pbp <- pred_tbl %>%
+  filter(variable == "public_birth_pay") %>%
+  mutate(Min = "",
+         Qu_1 = "",
+         Median = "",
+         Mean = mean_pred,
+         Qu_3 = "",
+         Max = "") %>% 
+  dplyr::select(Min:Max)
+
+cdz <- pred_tbl %>%
+  filter(variable == "z_score") 
+
+cdz_qu <- round(as.numeric(summary(cdz$mean_pred)), 3)
+
+rbind(pbp, cdz_qu) %>%
+  mutate(Covariates = c("Public", "Other", "Z-score")) %>%
+  dplyr::select(Covariates, Qu_1, Median, Mean, Qu_3) %>%
+  kable(format = "html",
+        caption = "Predicted Probabilities of Child Maltreatment Allegation within 5 Years of Age in Washington",
+        col.names = c("Covariates", "1st Qu.", "Median", "Mean", "3rd Qu."),
+        align = c("l", "c", "c", "c", "c")) %>%
+  column_spec(2:5, width = "5em") %>%
+  group_rows("Birth Payment", 1, 2) %>%
+  group_rows("Concentrated Disadvantage", 3, 3)
+```
+
+***
+
+_**Simulation of Expected Probabilities.**_  Figure 4 presents a plot of the expected probabilities of maltreatment allegation within five years from birth with 95% confidence intervals, stratified by birth payment across the levels of concentrated disadvantage measured by Z-scores.  The results demonstrate that children with public birth payment have a greater probability of having a maltreatment allegation, which increases as neighborhood levels of concentrated disadvantage increases.  At the minimum level of concentrated disadvantage, there is about a 10% increase in probability of maltreatment allegation from ‘Other’ to ‘Public’ birth payment, and at the maximum level of concentrated disadvantage there is about a 21% increase in probability.  
+
+#### Figure 4.
+```{r figure 4}
+# scenarios
+sim_model <- allegation ~ public_birth_pay + z_score + male + 
+  black + hispanic + asian_pacific_islander + native_american + other_unknown + 
+  mom_young + no_paternity + later_born
+
+sim_dat <- extractdata(sim_model, rbc, na.rm = TRUE)
+z_score_dat <- distinct(sim_dat, z_score)
+z_score <- z_score_dat$z_score
+
+pbp_cd_sim_dat <- bind_rows(pbp_0_sims, pbp_1_sims) %>%
+  mutate(z_score = rep(z_score, 2),
+         public_birth_pay = c(rep(0, 1432), rep(1, 1432)),
+         public_birth_pay = ifelse(public_birth_pay == 0, "Other", "Public"),
+         public_birth_pay = factor(public_birth_pay, levels = c("Public", "Other"))) %>%
+  rename(`Birth Payment` = public_birth_pay)
+
+ggplot(pbp_cd_sim_dat, aes(y = pe, x = z_score, color = `Birth Payment`)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower, ymax = upper, fill = `Birth Payment`), alpha = 0.5) +
+  scale_color_brewer(palette = "Paired", direction = -1) +
+  scale_fill_brewer(palette = "Paired", direction = -1) +
+  labs(title = "Expected Probability of Child Maltreatment Allegation \nwithin 5 Years of Age in Washington State", 
+       y = "Pr(Allegation)", x = "Concentrated Disadvantage (Z-score) with 95% CI ") +
+  geom_rug() +
+  theme_bw(base_size = 12) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+# IV.	Conclusion
+The results support the finding of the California study that a prior allegation to CPS is a risk factor for injury deaths.  Furthermore, a prior allegation of maltreatment in Washington appears to be a much stronger signal of risk than in California by a factor of about three.  A probable explanation is that more children are reported to CPS in Washington State (27.66%) than in California (11.9%), and this accounts for why there are more Washington children known to CPS prior to their injury death than California children (44% vs. 33%).  The addition of a community-level poverty variable does not improve the model fit.  However, the BICs reveal that the replication model is only moderately favored over the adjusted model including the community-level poverty variable.  Given its strong theoretical importance, the community level poverty covariate is maintained in the final Cox regression model.  The expected survival curves convey the actual difference between children who do and don't have a prior allegation that the hazard ratios do not.  With such a rare event, we expect a 0.24% difference in proportions surviving between the two groups for children without a maltreatment allegation when all other covariates are fixed at the mean. That difference is 0.35% for children with a maltreatment allegation.  This would suggest that poverty does play a role in increasing the risk of injury death in addition to the occurrence of maltreatment allegation, though the difference is not statistically significant.  
+
+The findings entailed further investigation of the association between maltreatment allegation and poverty.  To that effect, in the logistic regression model, we regressed maltreatment allegation on all the covariates in the adjusted Cox regression model and found that all covariates were significant, with public birth payment being the strongest predictor.  Children on public insurance at the time of birth have a predicted probability of maltreatment allegation that is three times higher than that of children on other insurance.  Children in the poorest quartile of neighborhoods have a probability that is twice as high as those who live in the most affluent quartile of neighborhoods.  Simulation of the expected probabilities for the poverty covariates demonstrates similar results.  
+
+The extremely large hazard ratio for maltreatment allegation seen in the cox models may be explained by the fact that maltreatment allegation is the only time-varying covariate, while the others are static.  Maltreatment allegation is also a much more reliable variable as our direct records from Children's Administration ensure that we have no missingness, while the construction of the other covariates required handling missing data.  Therefore, maltreatment allegation by definition contains more information than any other covariate.  One may also argue that the dichotomous covariate, birth payment, is a crude measure of individual levels of poverty.  It would likely perform much differently if it were a continuous measure of income.  Given these constraints and the findings of the models regressing maltreatment allegation on poverty, the results of the Cox models are not sufficient to determine that maltreatment allegation predicts injury death independent of poverty.
+
+# V.	Limitations
+The results from this study are limited by the fact that the population size of Washington State is much smaller than that of California.  Similarly, child injury fatalities are a rare event and the number of injury deaths observed in Washington State in the time frame was small, reducing the statistical power in some of the analyses.  The small sample size also yields larger confidence intervals in the hazard ratios.  The limitations of this small sample size may be resolved with a longer time frame.  Additionally, a study that included serious injuries (perhaps by including hospital admission records in addition to death records) would also increase the sample size without losing theoretical significance.  The results were also likely hampered by the varying amounts of missing values in our covariates, which in future analysis, will be resolved with multiple imputation methods.
+	
+# VI.	Implications
+This Washington State study is a replication of the “most rigorous longitudinal analysis of injury mortality following a report to CPS to date” (Putnam-Hornstein, 2011, p. 9).  The results support the finding of the California study that a prior allegation of maltreatment is a risk factor for injury deaths.  These results indicate that children who are at the greatest risk are being referred to the child protection system in an appropriate manner.  Given that children reported to CPS are at high risk for injury deaths, strong prevention and intervention strategies should be targeted to these families.  However, CPS can act only as a secondary prevention point after an alleged report of maltreatment has already occurred, at which point the main concern is ensuring child safety, and can result in child removal, out-of-home placement, and even parental termination of rights.  Poverty status is known at birth and is a strong predictor of later allegations of child maltreatment in early childhood.  Therefore, hospitals at the time of a birth may act as a more effective and timely primary prevention point for services and resources.
+
+## References
+Association of Maternal and Child Health Programs (2013). The Life Course Indicator: 
+Concentrated Disadvantage. http://www.amchp.org/programsandtopics/data-assessment/LifeCourseIndicatorDocuments/LC-06_ConcentratedDisad_Final-4-24-2014.pdf
+
+Brooks-Gunn, J., Duncan, G. J., Klebanov, P. K., & Sealand, N. (1993). Do neighborhoods 
+influence child and adolescent development?. American journal of sociology, 99(2), 353-395.
+
+Drake, B., & Pandey, S. (1996). Understanding the relationship between neighborhood poverty 
+and specific types of child maltreatment. Child abuse & neglect, 20(11), 1003-1018.
+
+Graham, J. C., Stepura, K., Baumann, D. J., & Kern, H. (2010). Predicting child fatalities among 
+less-severe CPS investigations. Children and Youth Services Review, 32(2), 274-280.
+
+Jonson-Reid, M., Drake, B., & Kohl, P. L. (2009). Is the overrepresentation of the poor in child 
+welfare caseloads due to bias or need?. Children and Youth Services Review, 31(3), 422-427.
+
+Lucas, D. R., Wezner, K. C., Milner, J. S., McCanne, T. R., Harris, I. N., Monroe-Posey, C., & 
+Nelson, J. P. (2002). Victim, perpetrator, family, and incident characteristics of infant and child homicide in the United States Air Force. Child Abuse & Neglect, 26(2), 167-186.
+
+Putnam-Hornstein, E. (2011). Report of maltreatment as a risk factor for injury death: A 
+prospective birth cohort study. Child Maltreatment, 16(3), 163-174.
+
+Sampson, R. J., Morenoff, J. D., & Gannon-Rowley, T. (2002). Assessing “neighborhood 
+effects”: Social processes and new directions in research. Annual review of sociology, 28(1), 443-478.
+
+Sedlak, A. J., Mettenburg, J., Basena, M., Peta, I., McPherson, K., & Greene, A. (2010). Fourth 
+national incidence study of child abuse and neglect (NIS-4). Washington, DC: US Department of Health and Human Services. Retrieved on July, 9, 2010.
+
